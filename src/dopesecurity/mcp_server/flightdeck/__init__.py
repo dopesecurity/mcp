@@ -1,0 +1,1 @@
+"""Flightdeck partner API boundary."""

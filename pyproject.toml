@@ -1,0 +1,58 @@
+[project]
+name = "dopesecurity-mcp-server"
+version = "0.1.0"
+description = "Local MCP server for the dope.security Flightdeck partner API"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "dope.security" }]
+dependencies = [
+    "mcp>=1.2.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.6",
+    "pydantic-settings>=2.2",
+    "structlog>=24.1.0",
+]
+
+[project.scripts]
+dopesecurity-mcp-server = "dopesecurity.mcp_server.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dopesecurity"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.5.0",
+    "mypy>=1.10",
+]
+
+[tool.ruff]
+target-version = "py311"
+src = ["src"]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["dopesecurity.mcp_server"]
+mypy_path = "src"
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = "mcp.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["src"]
+asyncio_mode = "auto"
+filterwarnings = ["error"]

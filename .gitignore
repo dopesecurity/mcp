@@ -1,0 +1,15 @@
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.amp/
+.ropeproject/
+dist/
+*.egg-info/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Scratch file used to capture failing tool runs during development.
+# Repo-root only; intentionally not docs/failures.md.
+/failures.md

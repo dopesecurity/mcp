@@ -1,11 +1,26 @@
 [project]
 name = "dopesecurity-mcp-server"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Local MCP server for the dope.security Flightdeck partner API"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Proprietary" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "dope.security" }]
+keywords = ["mcp", "model-context-protocol", "ai", "dope.security", "security", "swg"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Information Technology",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: System :: Systems Administration",
+    "Typing :: Typed",
+]
 dependencies = [
     "mcp>=1.2.0",
     "httpx>=0.27.0",
@@ -14,6 +29,11 @@ dependencies = [
     "structlog>=24.1.0",
 ]
 
+[project.urls]
+Homepage = "https://dope.security"
+Repository = "https://github.com/dopesecurity/mcp"
+Changelog = "https://github.com/dopesecurity/mcp/blob/main/CHANGELOG.md"
+
 [project.scripts]
 dopesecurity-mcp-server = "dopesecurity.mcp_server.__main__:main"
 
@@ -21,8 +41,24 @@ dopesecurity-mcp-server = "dopesecurity.mcp_server.__main__:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.version]
+path = "VERSION"
+pattern = "^(?P<version>.+)$"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/dopesecurity"]
+exclude = ["**/tests/**"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src/dopesecurity",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/LICENSE",
+    "/VERSION",
+    "/pyproject.toml",
+]
+exclude = ["**/tests/**"]
 
 [dependency-groups]
 dev = [

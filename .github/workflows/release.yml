@@ -1,0 +1,28 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  publish-pypi:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/dopesecurity-mcp-server/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.11
+      - run: uv build
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Same version can't be re-uploaded — bump VERSION to publish anew.
+          skip-existing: true

@@ -1,31 +1,29 @@
 # dopesecurity-mcp-server
 
-Local Model Context Protocol (MCP) server for the dope.security Flightdeck
-partner API. Lets MCP-aware AI assistants list and search endpoints, manage
-policies, and curate custom URL categories on a dope.security tenant.
-
-## Overview
-
-- Talks to the Flightdeck partner API at
-  `https://api.flightdeck.dope.security/v1`.
-- Runs locally over MCP `stdio`.
-- **Read-only by default.** Write tools are exposed only when mutations are
-  explicitly enabled.
-- Authentication uses OAuth client-credentials (`DOPE_CLIENT_ID` /
-  `DOPE_CLIENT_SECRET`). Tokens are cached and refreshed automatically.
+The Dope MCP is a local [Model Context Protocol](https://modelcontextprotocol.io)
+server that lets an AI assistant talk to your dope.security tenant —
+look at endpoints, read and tweak policies, and curate custom URL
+categories. It wraps most of the Flightdeck partner API, runs on your
+machine, and is **read-only out of the box**: nothing changes in your
+tenant until you explicitly turn writes on. It's currently in beta, we
+hope you enjoy using it.
 
 ## Installation
 
-The recommended way to run the server in an MCP host is via `uvx`:
+Installation is via `uvx`.
 
-```sh
-uvx dopesecurity-mcp-server --help
-```
+Runs the server on demand. Nothing is installed globally.
 
-`uvx` is part of [uv](https://docs.astral.sh/uv/). Any MCP host that can spawn
-a stdio process can launch the server.
+**Prerequisites**
 
-## MCP client configuration
+1. Install `uv` — see [Astral's install guide](https://docs.astral.sh/uv/getting-started/installation/).
+2. Install a Python runtime with `uv`:
+
+   ```sh
+   uv python install 3.11
+   ```
+
+**MCP client config**
 
 Add the server to your MCP client configuration:
 
@@ -39,63 +37,47 @@ Add the server to your MCP client configuration:
         "DOPE_CLIENT_ID": "your-client-id",
         "DOPE_CLIENT_SECRET": "your-client-secret",
         "DOPE_ENABLE_MUTATIONS": "false",
-        "DOPE_ENABLE_DESTRUCTIVE": "false",
-        "DOPE_LOG_LEVEL": "INFO",
-        "DOPE_TIMEOUT_SECONDS": "30"
+        "DOPE_ENABLE_DESTRUCTIVE": "false"
       }
     }
   }
 }
 ```
 
-## Required credentials
+## Three tiers of access
 
-Two environment variables must be set; they are never accepted as CLI flags or
-tool arguments:
+The tool surface is gated by two environment variables, both `false`
+by default. Tools that aren't enabled by the active combination are
+**not registered** at all — they don't exist on the MCP wire.
 
-| Variable             | Required | Description                                |
-| -------------------- | -------- | ------------------------------------------ |
-| `DOPE_CLIENT_ID`     | yes      | OAuth client ID issued by the dope console |
-| `DOPE_CLIENT_SECRET` | yes      | OAuth client secret                        |
+| `DOPE_ENABLE_MUTATIONS` | `DOPE_ENABLE_DESTRUCTIVE` | What the agent can do                                                                                                                            |
+| ----------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `false`                 | `false`                   | **Read-only.** Inspect endpoints, policies, custom categories. Cannot modify the tenant.                                                         |
+| `true`                  | `false`                   | **Read + write.** Per-entry creates, updates, upserts, assigns, unassigns, and per-entry deletes. Cannot drop a whole policy or wipe a section.  |
+| `true`                  | `true`                    | **Read + write + destructive.** Adds whole-policy drops, whole-section resets to base, whole-custom-category deletes, and wipe-all-URLs.         |
+| `false`                 | `true`                    | Invalid — the server refuses to start.                                                                                                           |
 
-The server never logs tokens, headers, request bodies, or secrets.
+Flightdeck RBAC still applies on top of whichever tier you enable:
+even when a tool is registered, Flightdeck may reject the call because
+your OAuth client's role doesn't permit it. Start with read-only,
+flip to mutations when you trust the agent's workflow, and only enable
+destructive when you explicitly want the agent to be able to start
+over.
 
-## Read-only default and two-tier write gating
-
-The MCP tool surface is split into three tiers, each off by default:
-
-1. **Read** — always registered. Listing, searching, and getting policy
-   state. Cannot modify the tenant.
-2. **Write** — registered when mutations are enabled. Per-entry
-   creates, updates, upserts, assigns, unassigns, and per-entry
-   deletes. Modifies tenant state but never drops a whole policy or
-   wipes a whole section.
-3. **Destructive** — registered only when **both** mutations and the
-   destructive gate are enabled. Drops a whole policy or custom
-   category, wipes every URL in a category, or resets a whole policy
-   section back to base.
-
-Tools are exposed according to the following flags:
-
-| `DOPE_ENABLE_MUTATIONS` | `DOPE_ENABLE_DESTRUCTIVE` | Tools exposed |
-| ----------------------- | ------------------------- | --------------- |
-| `false`                 | `false`                   | read only       |
-| `true`                  | `false`                   | read + write    |
-| `true`                  | `true`                    | read + write + destructive |
-| `false`                 | `true`                    | **server refuses to start** |
-
-
-Even when write or destructive tools are exposed, Flightdeck may still
-reject individual calls that exceed the caller's permissions.
-
-## Public configuration reference
+## Configuration reference
 
 | Env var                  | CLI flag               | Default | Description                                                                                  |
 | ------------------------ | ---------------------- | ------- | -------------------------------------------------------------------------------------------- |
+| `DOPE_CLIENT_ID`         | —                      | —       | API client ID issued from the dope console. **Required.**                                  |
+| `DOPE_CLIENT_SECRET`     | —                      | —       | API client secret issued from the dope console. **Required.**                              |
 | `DOPE_ENABLE_MUTATIONS`  | `--enable-mutations`   | `false` | Expose write tools that modify tenant state.                                                 |
 | `DOPE_ENABLE_DESTRUCTIVE`| `--enable-destructive` | `false` | Additionally expose destructive tools (whole-policy drops, whole-section resets). Requires mutations. |
 | `DOPE_TIMEOUT_SECONDS`   | `--timeout-seconds`    | `30`    | HTTP timeout for Flightdeck calls.                                                           |
 | `DOPE_LOG_LEVEL`         | `--log-level`          | `INFO`  | Log verbosity (logs go to stderr only).                                                      |
+
+`DOPE_CLIENT_ID` and `DOPE_CLIENT_SECRET` should be provided as
+environment variables. You can grab the credentials from the
+[dope console](https://inflight.dope.security/dope.console/settings/api-client-credentials).
 
 ## Available tools
 
@@ -161,7 +143,29 @@ reject individual calls that exceed the caller's permissions.
 | `delete_custom_category`              | Delete a whole custom category.      |
 | `delete_all_urls_from_custom_category`| Wipe every URL from a category.      |
 
-## Flightdeck routes deliberately omitted from MCP
+## Developing
+
+### Setup and verification
+
+From the repository root:
+
+```sh
+make install      # uv sync --locked
+make check        # lint + typecheck + unit tests
+make integration-tests  # requires DOPE_MCP_TESTS_CLIENT_SECRET
+uv run dopesecurity-mcp-server --help
+```
+
+Run `make help` to see all available targets.
+
+### Known limitations
+
+- `assign_policy_principals` and `unassign_policy_principals` are
+  read-merge-write on top of Flightdeck's overwrite-only assignments
+  endpoint, so concurrent edits to the same policy may be clobbered.
+- Pagination is cursor-based; the mcp server does not auto-fetch all pages.
+
+### Flightdeck routes deliberately omitted from MCP
 
 Some Flightdeck partner API routes are intentionally **not** exposed as
 MCP tools and will not be added. This is the list — treat it as a
@@ -173,25 +177,6 @@ MCP tools and will not be added. This is the list — treat it as a
   `delete_single_url_from_custom_category`, and
   `delete_all_urls_from_custom_category` instead, which force the agent
   to state intent explicitly.
-
-## Known limitations
-
-- Pagination is cursor-based; the server does not auto-fetch all pages.
-- Assignment write tools (`assign_policy_principals`,
-  `unassign_policy_principals`) are best-effort and non-atomic: the server
-  reads, merges, and writes back. Concurrent external changes can race.
-
-## Development and verification
-
-From the repository root:
-
-```sh
-uv sync
-uv run pytest src
-uv run ruff check .
-uv run mypy src
-uv run dopesecurity-mcp-server --help
-```
 
 ### Running a local checkout from an MCP client
 

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer
+from pydantic import ValidationError
 
+from dopesecurity.mcp_server.errors import InvalidToolInputError
 from dopesecurity.mcp_server.schemas import (
     CustomApplicationPlatformUpdate,
     CustomUrlBypassUpdate,
@@ -29,7 +31,7 @@ from dopesecurity.mcp_server.tools import get_app_context
 
 
 def register_policy_tools(
-    mcp: FastMCP,
+    mcp: MCPServer,
     *,
     enable_mutations: bool = False,
     enable_destructive: bool = False,
@@ -44,7 +46,7 @@ def register_policy_tools(
             _register_destructive_tools(mcp)
 
 
-def _register_read_tools(mcp: FastMCP) -> None:
+def _register_read_tools(mcp: MCPServer) -> None:
     @mcp.tool(
         name="list_policies",
         description=(
@@ -56,7 +58,7 @@ def _register_read_tools(mcp: FastMCP) -> None:
         ),
     )
     async def list_policies(
-        ctx: Context[Any, Any, Any],
+        ctx: Context,
         first: int | None = None,
         after: str | None = None,
         order: Literal["asc", "desc"] = "asc",
@@ -75,7 +77,7 @@ def _register_read_tools(mcp: FastMCP) -> None:
         ),
     )
     async def get_policy_assignments(
-        ctx: Context[Any, Any, Any], policy_name: str
+        ctx: Context, policy_name: str
     ) -> PolicyAssignmentsResult:
         return await get_app_context(ctx).policies.get_assignments(policy_name)
 
@@ -95,7 +97,7 @@ def _register_read_tools(mcp: FastMCP) -> None:
         ),
     )
     async def get_policy_restrictions(
-        ctx: Context[Any, Any, Any], policy_name: str
+        ctx: Context, policy_name: str
     ) -> PolicyRestrictionsResult:
         return await get_app_context(ctx).policies.get_restrictions(policy_name)
 
@@ -111,7 +113,7 @@ def _register_read_tools(mcp: FastMCP) -> None:
         ),
     )
     async def get_policy_exceptions(
-        ctx: Context[Any, Any, Any], policy_name: str
+        ctx: Context, policy_name: str
     ) -> PolicyExceptionsResult:
         return await get_app_context(ctx).policies.get_exceptions(policy_name)
 
@@ -129,7 +131,7 @@ def _register_read_tools(mcp: FastMCP) -> None:
         ),
     )
     async def get_policy_url_bypass(
-        ctx: Context[Any, Any, Any], policy_name: str
+        ctx: Context, policy_name: str
     ) -> PolicyUrlBypassResult:
         return await get_app_context(ctx).policies.get_url_bypass(policy_name)
 
@@ -144,12 +146,12 @@ def _register_read_tools(mcp: FastMCP) -> None:
         ),
     )
     async def get_policy_application_bypass_entries(
-        ctx: Context[Any, Any, Any], policy_name: str
+        ctx: Context, policy_name: str
     ) -> PolicyApplicationBypassResult:
         return await get_app_context(ctx).policies.get_application_bypass(policy_name)
 
 
-def _register_write_tools(mcp: FastMCP) -> None:
+def _register_write_tools(mcp: MCPServer) -> None:
     @mcp.tool(
         name="create_policy",
         description=(
@@ -158,7 +160,7 @@ def _register_write_tools(mcp: FastMCP) -> None:
         ),
     )
     async def create_policy(
-        ctx: Context[Any, Any, Any], policy_name: str
+        ctx: Context, policy_name: str
     ) -> SuccessResult:
         return await get_app_context(ctx).policies.create_policy(policy_name)
 
@@ -176,7 +178,7 @@ def _register_write_tools(mcp: FastMCP) -> None:
         ),
     )
     async def assign_policy_principals(
-        ctx: Context[Any, Any, Any],
+        ctx: Context,
         policy_name: str,
         user_emails: list[str] | None = None,
         group_emails: list[str] | None = None,
@@ -197,7 +199,7 @@ def _register_write_tools(mcp: FastMCP) -> None:
         ),
     )
     async def unassign_policy_principals(
-        ctx: Context[Any, Any, Any],
+        ctx: Context,
         policy_name: str,
         user_emails: list[str] | None = None,
         group_emails: list[str] | None = None,
@@ -220,18 +222,20 @@ def _register_write_tools(mcp: FastMCP) -> None:
         ),
     )
     async def update_policy_restrictions(
-        ctx: Context[Any, Any, Any],
+        ctx: Context,
         policy_name: str,
         categories: list[RestrictionUpdate] | None = None,
         custom_categories: list[RestrictionUpdate] | None = None,
     ) -> SuccessResult:
-        return await get_app_context(ctx).policies.update_restrictions(
-            UpdatePolicyRestrictionsInput(
+        try:
+            input = UpdatePolicyRestrictionsInput(
                 policy_name=policy_name,
                 categories=categories,
                 custom_categories=custom_categories,
             )
-        )
+        except ValidationError as exc:
+            raise InvalidToolInputError(str(exc)) from exc
+        return await get_app_context(ctx).policies.update_restrictions(input)
 
     @mcp.tool(
         name="replace_policy_category_exceptions",
@@ -249,18 +253,20 @@ def _register_write_tools(mcp: FastMCP) -> None:
         ),
     )
     async def replace_policy_category_exceptions(
-        ctx: Context[Any, Any, Any],
+        ctx: Context,
         policy_name: str,
         categories: list[ExceptionCategoryUpdate] | None = None,
         custom_categories: list[ExceptionCategoryUpdate] | None = None,
     ) -> SuccessResult:
-        return await get_app_context(ctx).policies.replace_category_exceptions(
-            ReplacePolicyCategoryExceptionsInput(
+        try:
+            input = ReplacePolicyCategoryExceptionsInput(
                 policy_name=policy_name,
                 categories=categories,
                 custom_categories=custom_categories,
             )
-        )
+        except ValidationError as exc:
+            raise InvalidToolInputError(str(exc)) from exc
+        return await get_app_context(ctx).policies.replace_category_exceptions(input)
 
     @mcp.tool(
         name="upsert_policy_url_bypass",
@@ -282,16 +288,18 @@ def _register_write_tools(mcp: FastMCP) -> None:
         ),
     )
     async def upsert_policy_url_bypass(
-        ctx: Context[Any, Any, Any],
+        ctx: Context,
         policy_name: str,
         custom: list[CustomUrlBypassUpdate] | None = None,
         default: list[DefaultUrlBypassUpdate] | None = None,
     ) -> SuccessResult:
-        return await get_app_context(ctx).policies.upsert_url_bypass(
-            UpsertPolicyUrlBypassInput(
+        try:
+            input = UpsertPolicyUrlBypassInput(
                 policy_name=policy_name, custom=custom, default=default
             )
-        )
+        except ValidationError as exc:
+            raise InvalidToolInputError(str(exc)) from exc
+        return await get_app_context(ctx).policies.upsert_url_bypass(input)
 
     @mcp.tool(
         name="delete_policy_url_bypass_entries",
@@ -304,7 +312,7 @@ def _register_write_tools(mcp: FastMCP) -> None:
         ),
     )
     async def delete_policy_url_bypass_entries(
-        ctx: Context[Any, Any, Any],
+        ctx: Context,
         policy_name: str,
         names: list[str],
     ) -> SuccessResult:
@@ -332,16 +340,18 @@ def _register_write_tools(mcp: FastMCP) -> None:
         ),
     )
     async def upsert_policy_application_bypass(
-        ctx: Context[Any, Any, Any],
+        ctx: Context,
         policy_name: str,
         custom: CustomApplicationPlatformUpdate | None = None,
         default: DefaultApplicationPlatformUpdate | None = None,
     ) -> SuccessResult:
-        return await get_app_context(ctx).policies.upsert_application_bypass(
-            UpsertPolicyApplicationBypassInput(
+        try:
+            input = UpsertPolicyApplicationBypassInput(
                 policy_name=policy_name, custom=custom, default=default
             )
-        )
+        except ValidationError as exc:
+            raise InvalidToolInputError(str(exc)) from exc
+        return await get_app_context(ctx).policies.upsert_application_bypass(input)
 
     @mcp.tool(
         name="delete_policy_application_bypass_entries",
@@ -356,7 +366,7 @@ def _register_write_tools(mcp: FastMCP) -> None:
         ),
     )
     async def delete_policy_application_bypass_entries(
-        ctx: Context[Any, Any, Any],
+        ctx: Context,
         policy_name: str,
         mac: list[str] | None = None,
         windows: list[str] | None = None,
@@ -366,7 +376,7 @@ def _register_write_tools(mcp: FastMCP) -> None:
         )
 
 
-def _register_destructive_tools(mcp: FastMCP) -> None:
+def _register_destructive_tools(mcp: MCPServer) -> None:
     @mcp.tool(
         name="delete_policy",
         description=(
@@ -377,7 +387,7 @@ def _register_destructive_tools(mcp: FastMCP) -> None:
         ),
     )
     async def delete_policy(
-        ctx: Context[Any, Any, Any], policy_name: str
+        ctx: Context, policy_name: str
     ) -> SuccessResult:
         return await get_app_context(ctx).policies.delete_policy(policy_name)
 
@@ -394,7 +404,7 @@ def _register_destructive_tools(mcp: FastMCP) -> None:
         ),
     )
     async def reset_policy_restrictions_to_base(
-        ctx: Context[Any, Any, Any],
+        ctx: Context,
         policy_name: str,
         scope: Literal["categories", "custom_categories", "both"],
     ) -> SuccessResult:
@@ -414,7 +424,7 @@ def _register_destructive_tools(mcp: FastMCP) -> None:
         ),
     )
     async def reset_policy_url_bypass_to_base(
-        ctx: Context[Any, Any, Any], policy_name: str
+        ctx: Context, policy_name: str
     ) -> SuccessResult:
         return await get_app_context(ctx).policies.reset_url_bypass_to_base(policy_name)
 
@@ -431,7 +441,7 @@ def _register_destructive_tools(mcp: FastMCP) -> None:
         ),
     )
     async def reset_policy_application_bypass_to_base(
-        ctx: Context[Any, Any, Any], policy_name: str
+        ctx: Context, policy_name: str
     ) -> SuccessResult:
         return await get_app_context(ctx).policies.reset_application_bypass_to_base(
             policy_name

@@ -2,7 +2,7 @@
 
 These verify that the spawned server actually exposes every read and
 write tool we expect over the MCP wire (catching registration regressions
-that unit tests on the in-process FastMCP object might miss).
+that unit tests on the in-process MCPServer object might miss).
 """
 
 from __future__ import annotations

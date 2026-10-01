@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 
 from dopesecurity.mcp_server.schemas import (
     CustomCategoryUrlsResult,
@@ -15,7 +15,7 @@ from dopesecurity.mcp_server.tools import get_app_context
 
 
 def register_custom_category_tools(
-    mcp: FastMCP,
+    mcp: MCPServer,
     *,
     enable_mutations: bool = False,
     enable_destructive: bool = False,
@@ -31,7 +31,7 @@ def register_custom_category_tools(
             _register_destructive_tools(mcp)
 
 
-def _register_read_tools(mcp: FastMCP) -> None:
+def _register_read_tools(mcp: MCPServer) -> None:
     @mcp.tool(
         name="list_custom_categories",
         description=(
@@ -41,7 +41,7 @@ def _register_read_tools(mcp: FastMCP) -> None:
         ),
     )
     async def list_custom_categories(
-        ctx: Context[Any, Any, Any],
+        ctx: Context,
         first: int | None = None,
         after: str | None = None,
         order: Literal["asc", "desc"] | None = None,
@@ -60,12 +60,12 @@ def _register_read_tools(mcp: FastMCP) -> None:
         ),
     )
     async def get_custom_category_urls(
-        ctx: Context[Any, Any, Any], custom_category_name: str
+        ctx: Context, custom_category_name: str
     ) -> CustomCategoryUrlsResult:
         return await get_app_context(ctx).custom_categories.get_urls(custom_category_name)
 
 
-def _register_write_tools(mcp: FastMCP) -> None:
+def _register_write_tools(mcp: MCPServer) -> None:
     @mcp.tool(
         name="create_custom_category",
         description=(
@@ -74,7 +74,7 @@ def _register_write_tools(mcp: FastMCP) -> None:
         ),
     )
     async def create_custom_category(
-        ctx: Context[Any, Any, Any], custom_category_name: str
+        ctx: Context, custom_category_name: str
     ) -> SuccessResult:
         return await get_app_context(ctx).custom_categories.create(custom_category_name)
 
@@ -96,7 +96,7 @@ def _register_write_tools(mcp: FastMCP) -> None:
         ),
     )
     async def add_urls_to_custom_category(
-        ctx: Context[Any, Any, Any],
+        ctx: Context,
         custom_category_name: str,
         urls: list[str],
     ) -> SuccessResult:
@@ -115,7 +115,7 @@ def _register_write_tools(mcp: FastMCP) -> None:
         ),
     )
     async def delete_single_url_from_custom_category(
-        ctx: Context[Any, Any, Any],
+        ctx: Context,
         custom_category_name: str,
         url: str,
     ) -> SuccessResult:
@@ -124,7 +124,7 @@ def _register_write_tools(mcp: FastMCP) -> None:
         )
 
 
-def _register_destructive_tools(mcp: FastMCP) -> None:
+def _register_destructive_tools(mcp: MCPServer) -> None:
     @mcp.tool(
         name="delete_custom_category",
         description=(
@@ -135,7 +135,7 @@ def _register_destructive_tools(mcp: FastMCP) -> None:
         ),
     )
     async def delete_custom_category(
-        ctx: Context[Any, Any, Any], custom_category_name: str
+        ctx: Context, custom_category_name: str
     ) -> SuccessResult:
         return await get_app_context(ctx).custom_categories.delete(custom_category_name)
 
@@ -151,7 +151,7 @@ def _register_destructive_tools(mcp: FastMCP) -> None:
         ),
     )
     async def delete_all_urls_from_custom_category(
-        ctx: Context[Any, Any, Any], custom_category_name: str
+        ctx: Context, custom_category_name: str
     ) -> SuccessResult:
         return await get_app_context(ctx).custom_categories.delete_all_urls(
             custom_category_name

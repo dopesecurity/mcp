@@ -18,7 +18,7 @@ import uuid
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from mcp import ClientSession
@@ -156,16 +156,16 @@ class McpHarness:
         is augmented with the credential hint to make triage easier.
         """
         result = await self.session.call_tool(name, dict(arguments or {}))
-        if result.isError:
+        if result.is_error:
             text = _extract_text(result.content) or "tool reported isError without text"
             if "invalid_client" in text or "client credentials" in text:
                 text = f"{text}\n\n{CRED_HINT}"
             raise ToolError(name, text)
-        if result.structuredContent is None:
+        if result.structured_content is None:
             raise AssertionError(
                 f"tool {name} returned no structuredContent; got content={result.content!r}"
             )
-        return result.structuredContent
+        return cast("dict[str, Any]", result.structured_content)
 
     async def list_tool_names(self) -> set[str]:
         listed = await self.session.list_tools()

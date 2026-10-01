@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import json
 
+import pytest
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
+
 from dopesecurity.mcp_server.errors import (
     AssignmentConflictError,
     DopesecurityMCPError,
@@ -129,3 +133,17 @@ def test_error_handles_non_serializable_details() -> None:
     rendered = str(err)
     assert "boom" in rendered
     assert "Details: " in rendered
+
+
+async def test_error_message_reaches_tool_caller() -> None:
+    server = MCPServer("test")
+
+    @server.tool(name="fails")
+    async def fails() -> str:
+        raise FlightdeckAuthenticationError(
+            "Flightdeck rejected the client credentials (status 401)",
+            details={"error": "invalid_client"},
+        )
+
+    with pytest.raises(ToolError, match="invalid_client"):
+        await server.call_tool("fails", {})

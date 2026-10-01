@@ -20,7 +20,7 @@ class _StrictSnakeModel(BaseModel):
     field names before validation.
 
     We avoid Pydantic ``validation_alias`` because it leaks into the
-    JSON schema FastMCP generates for tool outputs (validation-mode
+    JSON schema MCPServer generates for tool outputs (validation-mode
     schema uses the alias as the property name), which then mismatches
     the snake_case keys produced by ``model_dump(by_alias=True)``.
     Subclasses set ``_input_aliases`` as a ``ClassVar`` mapping

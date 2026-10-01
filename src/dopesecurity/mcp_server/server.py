@@ -1,4 +1,4 @@
-"""FastMCP server composition root."""
+"""MCPServer server composition root."""
 
 from __future__ import annotations
 
@@ -9,8 +9,9 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 import structlog
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
+from dopesecurity.mcp_server import __version__
 from dopesecurity.mcp_server.auth import FlightdeckTokenManager
 from dopesecurity.mcp_server.config import Settings, load_settings
 from dopesecurity.mcp_server.flightdeck.client import FlightdeckClient
@@ -55,7 +56,7 @@ def _make_lifespan(
     settings: Settings,
 ) -> Any:
     @asynccontextmanager
-    async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
+    async def app_lifespan(server: MCPServer) -> AsyncIterator[AppContext]:
         # WARNING: settings include the (masked) client_secret only via
         # SecretStr's repr; client_id is logged in clear text on purpose.
         _logger.info(
@@ -99,7 +100,7 @@ def _make_lifespan(
 
 
 def _register_tools(
-    mcp: FastMCP, *, enable_mutations: bool, enable_destructive: bool
+    mcp: MCPServer, *, enable_mutations: bool, enable_destructive: bool
 ) -> None:
     from dopesecurity.mcp_server.tools.custom_categories import register_custom_category_tools
     from dopesecurity.mcp_server.tools.endpoints import register_endpoint_tools
@@ -118,8 +119,8 @@ def _register_tools(
     )
 
 
-def create_server(settings: Settings | None = None) -> FastMCP:
-    """Build a configured FastMCP server instance."""
+def create_server(settings: Settings | None = None) -> MCPServer:
+    """Build a configured MCPServer server instance."""
 
     settings = settings if settings is not None else load_settings()
     if settings.enable_destructive and not settings.enable_mutations:
@@ -130,7 +131,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             "(destructive tools are a subset of write tools)."
         )
     lifespan = _make_lifespan(settings)
-    mcp = FastMCP(SERVER_NAME, instructions=INSTRUCTIONS, lifespan=lifespan)
+    mcp = MCPServer(
+        SERVER_NAME, instructions=INSTRUCTIONS, version=__version__, lifespan=lifespan
+    )
     _register_tools(
         mcp,
         enable_mutations=settings.enable_mutations,

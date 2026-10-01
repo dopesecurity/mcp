@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import Context
+    from mcp.server.mcpserver import Context
 
     from dopesecurity.mcp_server.server import AppContext
 
 
-def get_app_context(ctx: Context[Any, Any, Any]) -> AppContext:
-    """Retrieve the typed lifespan-managed AppContext from a FastMCP Context."""
+def get_app_context(ctx: Context) -> AppContext:
+    """Retrieve the typed lifespan-managed AppContext from an MCPServer Context."""
 
-    lifespan_context = ctx.request_context.lifespan_context
-    return lifespan_context  # type: ignore[no-any-return]
+    return cast("AppContext", ctx.request_context.lifespan_context)

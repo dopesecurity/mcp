@@ -2,9 +2,9 @@
 
 ## Overview
 
-Build the v1 dope.security MCP server described in `docs/mcp-server-design.md` from an empty implementation repository. The first implementation should bootstrap a Python `src/` project, package it as `dopesecurity-mcp-server`, expose a `dopesecurity-mcp-server` console command, and run a local `stdio` FastMCP server backed by the Flightdeck partner API in `docs/partner_api.yaml`.
+Build the v1 dope.security MCP server described in `docs/mcp-server-design.md` from an empty implementation repository. The first implementation should bootstrap a Python `src/` project, package it as `dopesecurity-mcp-server`, expose a `dopesecurity-mcp-server` console command, and run a local `stdio` MCPServer server backed by the Flightdeck partner API in `docs/partner_api.yaml`.
 
-The implementation should keep FastMCP thin: configuration, auth, HTTP execution, domain workflows, MCP schemas, and tool registration live in separate modules. Read tools are always available; mutating tools are registered only when explicitly enabled by configuration.
+The implementation should keep MCPServer thin: configuration, auth, HTTP execution, domain workflows, MCP schemas, and tool registration live in separate modules. Read tools are always available; mutating tools are registered only when explicitly enabled by configuration.
 
 ## Success Criteria
 
@@ -12,7 +12,7 @@ Done means all of the following are true:
 
 - The repository has a working Python package under `src/dopesecurity/mcp_server` with the console command `dopesecurity-mcp-server`.
 - `uv run dopesecurity-mcp-server --help` works from the repository root and writes no non-protocol runtime output to stdout during normal server operation.
-- The FastMCP server registers the exact v1 tool surface from `docs/mcp-server-design.md`; write tools are absent unless mutations are enabled.
+- The MCPServer server registers the exact v1 tool surface from `docs/mcp-server-design.md`; write tools are absent unless mutations are enabled.
 - Flightdeck auth uses `DOPE_CLIENT_ID` and `DOPE_CLIENT_SECRET` from the environment only, caches bearer tokens, refreshes near expiry, and retries one request after a `401` forced refresh.
 - Flightdeck HTTP errors are normalized into the internal error set described in the design document, preserving useful upstream `details` where present.
 - Services implement the agent-friendly behavior described in the design document: endpoint single-filter validation, policy assignment merge/remove workflows, policy content derived reads, per-submitted-category restriction/exception updates, bypass inheritance reset, and custom category URL encoding.
@@ -160,9 +160,9 @@ Implement startup configuration and error primitives shared by later auth/client
   - no secret flags
 - In `errors.py`, define:
   - `NormalizedError(code: str, message: str, details: Any | None = None)` as a dataclass or Pydantic model.
-  - Base `DopesecurityMCPError(Exception)` with a `normalized: NormalizedError` property.
+  - Base `DopesecurityMCPError(ToolError)` (from `mcp.server.mcpserver.exceptions`) with a `normalized: NormalizedError` property. Subclassing `ToolError` is what makes `MCPServer` surface the message to the caller.
   - Flightdeck boundary exceptions: `FlightdeckAuthenticationError`, `FlightdeckAuthorizationError`, `FlightdeckNotFoundError`, `FlightdeckValidationError`, `FlightdeckConflictError`, `FlightdeckServerError`, `FlightdeckTransportError`.
-  - Domain exceptions: `PolicyNotFoundError`, `AssignmentConflictError`, `InheritedPolicyMutationError`, `InvalidPrincipalError`, plus a general `MutationDisabledError` if useful for service/tool guards.
+  - Domain exceptions: `PolicyNotFoundError`, `AssignmentConflictError`, `InheritedPolicyMutationError`, `InvalidPrincipalError`, `InvalidToolInputError` (tool-boundary Pydantic validation failures), plus a general `MutationDisabledError` if useful for service/tool guards.
   - `to_tool_error(error: Exception) -> NormalizedError` that converts known errors to normalized shape and unknown errors to a concise internal error without leaking internals.
 
 #### Tests
@@ -273,13 +273,13 @@ uv run ruff check .
 uv run mypy src
 ```
 
-### Task 4: Implement FastMCP server composition and mutation-gated registration hooks
+### Task 4: Implement MCPServer server composition and mutation-gated registration hooks
 
 **Files:** `src/dopesecurity/mcp_server/server.py`, `src/dopesecurity/mcp_server/__main__.py`, `src/dopesecurity/mcp_server/tools/__init__.py`, `src/dopesecurity/mcp_server/services/__init__.py`, `src/dopesecurity/mcp_server/tests/test_server.py`
 
 **Depends on:** Tasks 2, 3
 
-**Reference files:** `docs/mcp-server-design.md`, official FastMCP lifespan pattern as summarized in the design document
+**Reference files:** `docs/mcp-server-design.md`, official MCPServer lifespan pattern as summarized in the design document
 
 #### Goal
 
@@ -287,9 +287,9 @@ Create the MCP composition root and CLI startup path without yet depending on co
 
 #### Success criteria
 
-- `server.py` exposes `create_server(settings: Settings | None = None) -> FastMCP`.
+- `server.py` exposes `create_server(settings: Settings | None = None) -> MCPServer`.
 - Lifespan creates exactly one shared `httpx.AsyncClient`, one `FlightdeckTokenManager`, one `FlightdeckClient`, and one typed `AppContext` per process.
-- Tool modules are registered through domain registration functions that accept the `FastMCP` instance and mutation setting.
+- Tool modules are registered through domain registration functions that accept the `MCPServer` instance and mutation setting.
 - Read registration is always invoked; write registration is invoked only when `settings.enable_mutations` is true.
 - `__main__.py` loads settings from env plus CLI overrides, configures logging, creates the server, and runs `stdio` by default.
 - Verification commands pass from the repository root.
@@ -305,16 +305,16 @@ Create the MCP composition root and CLI startup path without yet depending on co
 
 - In `server.py`, define:
   - `@dataclass(frozen=True) class AppContext` with fields `settings`, `token_manager`, `flightdeck`, `endpoints`, `policies`, `custom_categories`.
-  - `@asynccontextmanager async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]` following the design document.
-  - `def create_server(settings: Settings | None = None) -> FastMCP` that builds `FastMCP("dope.security Flightdeck", lifespan=...)` or equivalent SDK-supported constructor.
+  - `@asynccontextmanager async def app_lifespan(server: MCPServer) -> AsyncIterator[AppContext]` following the design document.
+  - `def create_server(settings: Settings | None = None) -> MCPServer` that builds `MCPServer("dope.security Flightdeck", version=__version__, lifespan=...)` or equivalent SDK-supported constructor.
   - Private registration helper that imports and calls `register_endpoint_tools`, `register_policy_tools`, and `register_custom_category_tools` from the corresponding tool modules. If those modules do not yet exist, create stubs in this task or coordinate with dependent tasks.
 - Make the lifespan use `httpx.AsyncClient(base_url=settings.api_base_url, timeout=settings.timeout_seconds)`.
 - Make `__main__.py` call the SDK run method for stdio only after successful settings load.
-- Provide an internal helper in `tools/__init__.py` for retrieving app context from a FastMCP `Context`, e.g. `def get_app_context(ctx: Context) -> AppContext`, with imports arranged to avoid circular imports.
+- Provide an internal helper in `tools/__init__.py` for retrieving app context from a MCPServer `Context`, e.g. `def get_app_context(ctx: Context) -> AppContext`, with imports arranged to avoid circular imports.
 
 #### Tests
 
-- `test_create_server_returns_fastmcp_instance`: create settings with test credentials and assert server object is built.
+- `test_create_server_returns_mcpserver_instance`: create settings with test credentials and assert server object is built.
 - `test_lifespan_builds_shared_context`: enter lifespan and assert context has settings, token manager, client, and service placeholders/instances.
 - `test_write_tools_not_registered_when_mutations_disabled`: monkeypatch registration functions or inspect registered tools if SDK allows; assert write registration path is skipped.
 - `test_write_tools_registered_when_mutations_enabled`: same, assert write registration path is invoked.
@@ -353,7 +353,7 @@ Define stable snake_case MCP-facing models for inputs and outputs so services/to
 
 - Do not encode raw Flightdeck camelCase into MCP-facing models except as Pydantic aliases for parsing.
 - Do not add behavior that fetches additional pages automatically.
-- Do not implement HTTP calls or FastMCP decorators in this task.
+- Do not implement HTTP calls or MCPServer decorators in this task.
 
 #### Spec
 
@@ -430,7 +430,7 @@ Implement the endpoint read surface with pre-call validation and MCP tool regist
   - Call `flightdeck.search_endpoints(params)`.
   - Normalize `payload["data"]["endpoints"]` and `payload["data"]["pageInfo"]` into `SearchEndpointsResult`.
 - In `tools/endpoints.py`, define:
-  - `def register_endpoint_tools(mcp: FastMCP, *, enable_mutations: bool = False) -> None`
+  - `def register_endpoint_tools(mcp: MCPServer, *, enable_mutations: bool = False) -> None`
   - Register only `search_endpoints`.
   - Tool signature should use explicit keyword parameters rather than a generic dict when possible, matching the input fields in the design document.
   - Tool description must state that zero search fields lists endpoints and only one search/filter field may be supplied.
@@ -463,7 +463,7 @@ uv run mypy src
 
 #### Goal
 
-Implement policy domain behavior independently of FastMCP decorators: listing, lifecycle, assignments, restrictions, exceptions, URL bypass, and application bypass.
+Implement policy domain behavior independently of MCPServer decorators: listing, lifecycle, assignments, restrictions, exceptions, URL bypass, and application bypass.
 
 #### Success criteria
 
@@ -579,7 +579,7 @@ Expose the policy service through the approved v1 MCP policy tools with clear to
 #### Spec
 
 - In `tools/policies.py`, define:
-  - `def register_policy_tools(mcp: FastMCP, *, enable_mutations: bool = False) -> None`
+  - `def register_policy_tools(mcp: MCPServer, *, enable_mutations: bool = False) -> None`
   - Inner async functions decorated with `@mcp.tool(...)` or the SDK's equivalent registration API.
   - Read tool handlers that retrieve `PoliciesService` from context and call the corresponding service methods.
   - Write tool handlers only inside an `if enable_mutations:` block.
@@ -650,7 +650,7 @@ Implement the custom category read/write surface, including internal URL encodin
   - `async def delete_single_url(self, custom_category_name: str, url: str) -> SuccessResult`
 - Use `urllib.parse.quote(url, safe="")` for `delete_single_url` before calling `flightdeck.delete_single_url_from_custom_category`.
 - In `tools/custom_categories.py`, define:
-  - `def register_custom_category_tools(mcp: FastMCP, *, enable_mutations: bool = False) -> None`
+  - `def register_custom_category_tools(mcp: MCPServer, *, enable_mutations: bool = False) -> None`
   - Register read handlers always and write handlers only when enabled.
   - Mutating descriptions must state they modify tenant state.
 - Update `server.py` registration if needed.

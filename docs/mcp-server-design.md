@@ -13,11 +13,11 @@ This is a design document only. It is not yet the implementation plan.
 ## Core Approach
 
 - Use Python.
-- Use the official MCP Python SDK with `FastMCP`.
+- Use the official MCP Python SDK with `MCPServer`.
 - Run v1 over `stdio`.
 - Distribute the server as `dopesecurity-mcp-server`.
 - Expose tools only in v1.
-- Keep `FastMCP` as a thin transport and tool-registration layer.
+- Keep `MCPServer` as a thin transport and tool-registration layer.
 - Initialize shared dependencies once per process in the SDK lifespan hook and expose them through typed app context.
 - Put Flightdeck-specific logic in a small service layer plus a wire-close API client.
 - Keep the code structured so `streamable-http` can be added later without redesigning the tool layer.
@@ -32,7 +32,7 @@ This is a design document only. It is not yet the implementation plan.
 
 The implementation should stay thin and layered.
 
-`FastMCP` should be the transport and tool-registration layer, not the place where business logic lives.
+`MCPServer` should be the transport and tool-registration layer, not the place where business logic lives.
 The server should use the official Python SDK lifespan pattern as its composition root: create shared dependencies once, yield a typed app context, and let tool handlers access that context from `ctx.request_context.lifespan_context`.
 
 The first cut should have these layers:
@@ -42,7 +42,7 @@ The first cut should have these layers:
   - CLI flag parsing
   - config validation
 - `server`
-  - `FastMCP` instance creation
+  - `MCPServer` instance creation
   - lifespan hook
   - typed app context creation
   - tool module registration
@@ -57,7 +57,7 @@ The first cut should have these layers:
 - `schemas`
   - MCP-facing input and output models
 - `tools`
-  - FastMCP tool registration
+  - MCPServer tool registration
   - tool descriptions and annotations
   - derived tool behavior
 
@@ -105,7 +105,7 @@ src/dopesecurity/
 Recommended responsibility split:
 
 - `server.py`
-  - create the `FastMCP` instance
+  - create the `MCPServer` instance
   - define the lifespan hook
   - build the typed app context
   - register tool modules
@@ -138,7 +138,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 import httpx
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 
 @dataclass
@@ -152,7 +152,7 @@ class AppContext:
 
 
 @asynccontextmanager
-async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
+async def app_lifespan(server: MCPServer) -> AsyncIterator[AppContext]:
     settings = Settings()
     http = httpx.AsyncClient(
         base_url=settings.api_base_url,
@@ -737,6 +737,8 @@ The service layer may raise more specific domain errors when that improves tool 
 - `InheritedPolicyMutationError`
 - `InvalidPrincipalError`
 
+Tool-boundary input validation failures (Pydantic `ValidationError` from a tool's input model) are raised as `InvalidToolInputError` (code `invalid_input`).
+
 Tool failures should present a predictable normalized shape internally:
 
 - `code`
@@ -754,6 +756,8 @@ Important cases to preserve in `details`:
 - invalid exception principals
 - inheriting-policy delete restrictions
 - invalid URL lists
+
+The base `DopesecurityMCPError` subclasses `ToolError` from `mcp.server.mcpserver.exceptions`. `MCPServer` surfaces `str(exc)` only for `ToolError`; any other exception is reduced to a generic "Error executing tool <name>", so every user-meaningful failure must derive from the base error.
 
 Expected business failures should become concise agent-safe tool errors. MCP protocol errors should be reserved for actual protocol or transport faults.
 

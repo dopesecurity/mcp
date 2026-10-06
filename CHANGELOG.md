@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 - Upgrade to `mcp` 2.x (`mcp>=2.2,<3`); requires `pydantic>=2.12`.
 
+## [0.1.2] — 2026-10-05
+
+- Fix Dependabot alerts.
+
 ## [0.1.1] — 2026-09-30
 
 - Pin `mcp<2`. `mcp` 2.x removed `mcp.server.fastmcp`, so fresh `uvx`

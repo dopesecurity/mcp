@@ -115,7 +115,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         client_secret_length=len(settings.client_secret.get_secret_value()),
     )
 
-    # Imported lazily so --help does not require constructing FastMCP.
+    # Imported lazily so --help does not require constructing MCPServer.
     from dopesecurity.mcp_server.server import create_server
 
     try:

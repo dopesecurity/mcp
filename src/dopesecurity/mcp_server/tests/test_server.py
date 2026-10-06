@@ -1,11 +1,11 @@
-"""Tests for the FastMCP server composition."""
+"""Tests for the MCPServer server composition."""
 
 from __future__ import annotations
 
 import argparse
 
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from pydantic import SecretStr
 
 from dopesecurity.mcp_server.__main__ import _build_parser
@@ -34,16 +34,17 @@ def _settings(
     )
 
 
-def test_create_server_returns_fastmcp_instance() -> None:
+def test_create_server_returns_mcpserver_instance() -> None:
     server = create_server(_settings())
-    assert isinstance(server, FastMCP)
+    assert isinstance(server, MCPServer)
 
 
 async def test_lifespan_builds_shared_context() -> None:
     server = create_server(_settings())
 
-    lifespan = server._mcp_server.lifespan
-    async with lifespan(server._mcp_server) as ctx:
+    lifespan = server.settings.lifespan
+    assert lifespan is not None
+    async with lifespan(server) as ctx:
         assert isinstance(ctx, AppContext)
         assert isinstance(ctx.settings, Settings)
         assert isinstance(ctx.token_manager, FlightdeckTokenManager)
@@ -59,7 +60,7 @@ def _patch_registrations(
     captured: dict[str, dict[str, bool]] = {}
 
     def fake_register_policy(
-        mcp: FastMCP,
+        mcp: MCPServer,
         *,
         enable_mutations: bool = False,
         enable_destructive: bool = False,
@@ -70,12 +71,12 @@ def _patch_registrations(
         }
 
     def fake_register_endpoints(
-        mcp: FastMCP, *, enable_mutations: bool = False
+        mcp: MCPServer, *, enable_mutations: bool = False
     ) -> None:
         captured["endpoints"] = {"mutations": enable_mutations}
 
     def fake_register_custom(
-        mcp: FastMCP,
+        mcp: MCPServer,
         *,
         enable_mutations: bool = False,
         enable_destructive: bool = False,

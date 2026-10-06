@@ -15,11 +15,11 @@ Capture the MCP implementation guidance and framework tradeoffs most relevant to
   - `streamable-http` for remote or multi-client usage over HTTP.
 - For production remote deployments, MCP guidance points toward HTTP transport plus OAuth 2.1 style authorization at the transport layer.
 - The biggest implementation choice is language and framework:
-  - Python has the strongest official high-level path today because the official Python SDK includes `FastMCP` and explicitly documents streamable HTTP and auth hooks.
+  - Python has the strongest official high-level path today because the official Python SDK includes `MCPServer` and explicitly documents streamable HTTP and auth hooks.
   - TypeScript has a strong official SDK, but remote HTTP usage is lower-level and requires more session and transport wiring.
   - TypeScript `FastMCP` looks productive and feature-rich, but it is a community framework rather than the official SDK.
-- Best initial recommendation: build v1 with the official Python SDK using `FastMCP`, start with a tool-focused server, and keep remote auth and partner API credentials server-managed.
-- Recommended server shape: keep `FastMCP` as a thin transport layer, build shared dependencies in the SDK's lifespan context, and put Flightdeck-specific logic in a small service layer plus API client.
+- Best initial recommendation: build v1 with the official Python SDK using `MCPServer`, start with a tool-focused server, and keep remote auth and partner API credentials server-managed.
+- Recommended server shape: keep `MCPServer` as a thin transport layer, build shared dependencies in the SDK's lifespan context, and put Flightdeck-specific logic in a small service layer plus API client.
 - Recommended dependency placement: settings, `httpx.AsyncClient`, token manager, and domain services should be created once per process in the lifespan hook and accessed from tools through typed app context.
 - Recommended Python package shape: use a normal `src/` layout with separate modules for `tools`, `services`, `flightdeck` client/auth, and configuration, but avoid extra repository or framework layers that only wrap the partner API again.
 - Recommended error model: normalize Flightdeck HTTP failures into a small set of domain errors, return concise agent-safe tool errors for expected failures, and reserve MCP protocol errors for actual protocol or transport faults.
@@ -887,11 +887,11 @@ So the answer to "is there guidance?" is:
 
 ## Framework And SDK Options
 
-### Option 1: Official Python SDK With FastMCP
+### Option 1: Official Python SDK With MCPServer
 
 What the docs show:
 
-- `FastMCP` is the high-level server API in the official Python SDK.
+- `MCPServer` is the high-level server API in the official Python SDK.
 - Tools can be declared directly from Python functions.
 - Streamable HTTP is directly supported.
 - Official docs show `stateless_http=True` and `json_response=True` as the recommended production shape.
@@ -907,7 +907,7 @@ Why this is strong:
 Tradeoffs:
 
 - If the team strongly prefers TypeScript, this adds a language decision.
-- Some ecosystem examples still mix older low-level MCP patterns with newer FastMCP patterns, so version discipline matters.
+- Some ecosystem examples still mix older low-level MCP patterns with newer MCPServer patterns, so version discipline matters.
 
 Assessment:
 
@@ -930,13 +930,13 @@ Why this is strong:
 
 Tradeoffs:
 
-- More ceremony than Python `FastMCP`.
+- More ceremony than Python `MCPServer`.
 - Remote deployment requires more wiring around transports, sessions, and Express or Node HTTP integration.
 
 Assessment:
 
 - Good choice if Node or TypeScript is a project constraint.
-- Slightly slower path to a clean v1 than Python `FastMCP`.
+- Slightly slower path to a clean v1 than Python `MCPServer`.
 
 ### Option 3: TypeScript FastMCP
 
@@ -1032,11 +1032,11 @@ MCP supports server instructions. For this API, that can later include guidance 
 - prefer read-only tools unless the user asks to change state
 - summarize impact before invoking write tools
 
-## Recommended Python/FastMCP Server Architecture
+## Recommended Python/MCPServer Server Architecture
 
 ### Core Design Principles
 
-- Use `FastMCP` as the MCP transport and tool-registration layer, not as the place where business logic lives.
+- Use `MCPServer` as the MCP transport and tool-registration layer, not as the place where business logic lives.
 - Build the server around the official Python SDK lifespan pattern: initialize shared dependencies once, yield a typed app context, and let tool handlers pull dependencies from `ctx.request_context.lifespan_context`.
 - Keep tools thin and agent-facing: they should expose good names, docstrings, and normalized schemas, then delegate almost immediately to service methods.
 - Keep the Flightdeck client close to the wire format, but keep the MCP-facing contract normalized and snake_case.
@@ -1073,7 +1073,7 @@ src/dopemcp/
 
 Recommended responsibility split:
 
-- `server.py`: create the `FastMCP` instance, define the lifespan hook, register tool modules, and expose a single `create_server()` factory.
+- `server.py`: create the `MCPServer` instance, define the lifespan hook, register tool modules, and expose a single `create_server()` factory.
 - `__main__.py`: load settings and run the default local `stdio` server.
 - `config.py`: environment-backed settings and startup validation.
 - `auth.py`: Flightdeck token exchange and refresh logic.
@@ -1142,7 +1142,7 @@ It should stay close to the partner API documented in [the OpenAPI spec](file://
 - [`/policies/{policy_name}/bypass/applications`](file:///Users/ldc/repos/dopemcp/docs/partner_api.yaml#L1194-L1439)
 - [`/custom_categories`](file:///Users/ldc/repos/dopemcp/docs/partner_api.yaml#L1440-L1880)
 
-### FastMCP Composition Pattern
+### MCPServer Composition Pattern
 
 The official Python SDK examples strongly point toward using lifespan as the composition root.
 
@@ -1154,7 +1154,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 import httpx
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 
 @dataclass
@@ -1168,7 +1168,7 @@ class AppContext:
 
 
 @asynccontextmanager
-async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
+async def app_lifespan(server: MCPServer) -> AsyncIterator[AppContext]:
     settings = Settings()
     http = httpx.AsyncClient(
         base_url=settings.api_base_url,
@@ -1349,7 +1349,7 @@ For v1, basic structured logs and good error messages are enough. Full tracing o
 
 For this project, the cleanest architecture is:
 
-1. `FastMCP` server with typed lifespan context as the composition root.
+1. `MCPServer` server with typed lifespan context as the composition root.
 2. One shared `httpx.AsyncClient` plus one dedicated token manager per process.
 3. A small service layer grouped by `endpoints`, `policies`, and `custom_categories`.
 4. Thin MCP tool modules that expose normalized snake_case contracts.
@@ -1361,7 +1361,7 @@ For this project, the cleanest architecture is:
 If we want the fastest path to a correct and maintainable v1:
 
 1. Use Python.
-2. Use the official Python SDK with `FastMCP`.
+2. Use the official Python SDK with `MCPServer`.
 3. Model the first release almost entirely as tools.
 4. Start with local `stdio` for development and client compatibility.
 5. Design the code so it can also run with `streamable-http` later.

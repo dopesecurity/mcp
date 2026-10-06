@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
+from mcp.server.mcpserver.exceptions import ToolError
 
 _logger = structlog.get_logger("dopesecurity.mcp_server.errors")
 
@@ -101,13 +102,15 @@ class NormalizedError:
     details: Any | None = field(default=None)
 
 
-class DopesecurityMCPError(Exception):
+class DopesecurityMCPError(ToolError):
     """Base exception type for the MCP server.
 
     The exception's string form embeds both an enriched message (with any
     per-error detail messages extracted from ``details``) and a JSON
-    ``Details: {...}`` block. FastMCP surfaces ``str(exc)`` to the caller, so
-    this is what the agent sees on a failed tool call.
+    ``Details: {...}`` block. Subclassing ``ToolError`` makes MCPServer surface
+    ``str(exc)`` to the caller (any other exception is reduced to a generic
+    "Error executing tool <name>"), so this is what the agent sees on a failed
+    tool call.
     """
 
     code: str = "internal_error"
@@ -204,6 +207,11 @@ class InheritedPolicyMutationError(DopesecurityMCPError):
 class InvalidPrincipalError(DopesecurityMCPError):
     code = "invalid_principal"
     message = "One or more principals are invalid"
+
+
+class InvalidToolInputError(DopesecurityMCPError):
+    code = "invalid_input"
+    message = "Invalid tool input"
 
 
 class MutationDisabledError(DopesecurityMCPError):

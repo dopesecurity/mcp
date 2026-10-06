@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import SecretStr
 
 from dopesecurity.mcp_server.config import DEFAULT_BASE_URL, Settings
@@ -118,3 +120,10 @@ def test_url_bypass_descriptions_explain_custom_and_default() -> None:
         assert "custom" in desc and "default" in desc, (
             f"{name} description should explain custom vs default entries"
         )
+
+
+async def test_update_policy_restrictions_without_sections_error_reaches_caller() -> None:
+    server = create_server(_settings(enable_mutations=True))
+
+    with pytest.raises(ToolError, match="at least one"):
+        await server.call_tool("update_policy_restrictions", {"policy_name": "p"})

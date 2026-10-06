@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
-from mcp.server.fastmcp import Context, FastMCP
-from pydantic import Field
+from mcp.server.mcpserver import Context, MCPServer
+from pydantic import Field, ValidationError
 
+from dopesecurity.mcp_server.errors import InvalidToolInputError
 from dopesecurity.mcp_server.schemas import EndpointSearchInput, SearchEndpointsResult
 from dopesecurity.mcp_server.tools import get_app_context
 
 
-def register_endpoint_tools(mcp: FastMCP, *, enable_mutations: bool = False) -> None:  # noqa: ARG001
+def register_endpoint_tools(mcp: MCPServer, *, enable_mutations: bool = False) -> None:  # noqa: ARG001
     """Register read-only endpoint tools on `mcp`.
 
     Endpoint tools are always registered regardless of the mutation setting.
@@ -35,7 +36,7 @@ def register_endpoint_tools(mcp: FastMCP, *, enable_mutations: bool = False) -> 
         ),
     )
     async def search_endpoints(
-        ctx: Context[Any, Any, Any],
+        ctx: Context,
         first: Annotated[int | None, Field(gt=0)] = None,
         after: str | None = None,
         order: Literal["asc", "desc"] | None = None,
@@ -50,20 +51,22 @@ def register_endpoint_tools(mcp: FastMCP, *, enable_mutations: bool = False) -> 
         location_id: str | None = None,
         agent_version: str | None = None,
     ) -> SearchEndpointsResult:
-        app = get_app_context(ctx)
-        input = EndpointSearchInput(
-            first=first,
-            after=after,
-            order=order,
-            query=query,
-            email_id=email_id,
-            device_name=device_name,
-            user_id=user_id,
-            os_version=os_version,
-            status=status,
-            debug_state=debug_state,
-            fallback_mode=fallback_mode,
-            location_id=location_id,
-            agent_version=agent_version,
-        )
-        return await app.endpoints.search_endpoints(input)
+        try:
+            input = EndpointSearchInput(
+                first=first,
+                after=after,
+                order=order,
+                query=query,
+                email_id=email_id,
+                device_name=device_name,
+                user_id=user_id,
+                os_version=os_version,
+                status=status,
+                debug_state=debug_state,
+                fallback_mode=fallback_mode,
+                location_id=location_id,
+                agent_version=agent_version,
+            )
+        except ValidationError as exc:
+            raise InvalidToolInputError(str(exc)) from exc
+        return await get_app_context(ctx).endpoints.search_endpoints(input)

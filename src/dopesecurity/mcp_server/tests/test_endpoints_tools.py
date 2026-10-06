@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import SecretStr
 
 from dopesecurity.mcp_server.config import DEFAULT_BASE_URL, Settings
@@ -38,3 +40,10 @@ def test_search_endpoints_tool_description_mentions_zero_or_one_filter() -> None
     assert tool.description is not None
     assert "one" in tool.description.lower()
     assert "search" in tool.description.lower() or "filter" in tool.description.lower()
+
+
+async def test_search_endpoints_multiple_filters_error_reaches_caller() -> None:
+    server = create_server(_settings())
+
+    with pytest.raises(ToolError, match="at most one"):
+        await server.call_tool("search_endpoints", {"query": "x", "device_name": "y"})

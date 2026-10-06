@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [0.1.2] — 2026-10-05
 
-- Fix dependabot alerts.
+- Fix Dependabot alerts.
 
 ## [0.1.1] — 2026-09-30
 

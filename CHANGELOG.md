@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] — 2026-11-02
+
+- Update `certifi` to 2026.10.23 and require `certifi>=2026.10.23` directly.
+
 ## [0.2.0] — 2026-09-30
 
 - Upgrade to `mcp` 2.x (`mcp>=2.2,<3`); requires `pydantic>=2.12`.
